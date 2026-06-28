@@ -17,7 +17,6 @@ export default function WhatsAppPreview({ messages, settings }: PreviewProps) {
   
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // Efeito para rodar a simulação da conversa passo a passo
   useEffect(() => {
     if (!isPlaying || messages.length === 0 || currentIndex >= messages.length) {
       if (currentIndex >= messages.length) setIsPlaying(false);
@@ -26,21 +25,16 @@ export default function WhatsAppPreview({ messages, settings }: PreviewProps) {
 
     const currentMsg = messages[currentIndex];
     
-    // 1. Ativa o efeito de "digitando..." se estiver configurado
     setIsTyping(true);
     setCurrentTyper(currentMsg.sender);
 
-    // Calcula o tempo de digitação baseado no tamanho do texto (textos longos demoram mais)
-    const textLengthFactor = Math.min(currentMsg.text.length * 0.03, 3); // cap em 3s
+    const textLengthFactor = Math.min(currentMsg.text.length * 0.03, 3);
     const typingTime = settings.typingDuration * textLengthFactor * 1000;
 
     const typingTimeout = setTimeout(() => {
       setIsTyping(false);
-      
-      // 2. Adiciona a mensagem na tela
       setVisibleMessages((prev) => [...prev, currentMsg]);
       
-      // 3. Define o tempo de leitura antes de passar para a próxima mensagem
       const readingTime = Math.max(currentMsg.text.length * 40, 1500) * settings.scrollSpeed;
 
       const nextMessageTimeout = setTimeout(() => {
@@ -54,7 +48,6 @@ export default function WhatsAppPreview({ messages, settings }: PreviewProps) {
     return () => clearTimeout(typingTimeout);
   }, [isPlaying, currentIndex, messages, settings]);
 
-  // Efeito de Scroll Automático Suave sempre que uma nova mensagem entra na tela
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTo({
@@ -66,15 +59,16 @@ export default function WhatsAppPreview({ messages, settings }: PreviewProps) {
 
   const handlePlayPause = () => {
     if (currentIndex >= messages.length) {
-      // Reinicia a conversa se já tiver terminado
       setVisibleMessages([]);
       setCurrentIndex(0);
     }
     setIsPlaying(!isPlaying);
   };
 
-  // Determina se a mensagem é nossa (Pessoa B) ou do outro (Pessoa A) para alinhar os balões
   const isMe = (sender: string) => sender.toLowerCase() === settings.personBName.toLowerCase();
+
+  // 💡 Define o nome fixo que aparece no topo: Sempre o da Pessoa A (com quem você conversa)
+  const contactName = settings.personAName || 'Contato';
 
   return (
     <div className="flex flex-col items-center w-full max-w-sm">
@@ -91,25 +85,28 @@ export default function WhatsAppPreview({ messages, settings }: PreviewProps) {
         </span>
       </div>
 
-      {/* MOCKUP DO CELULAR (Proporção TikTok 9:16) */}
-      <div className="relative w-full aspect-[9/16] bg-neutral-950 border-4 border-neutral-800 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col">
+      {/* MOCKUP DO CELULAR (ID adicionado para futura referência de gravação focada) */}
+      <div 
+        id="tiktok-phone" 
+        className="relative w-full aspect-[9/16] bg-neutral-950 border-4 border-neutral-800 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col"
+      >
         
-        {/* Header do WhatsApp */}
+        {/* Header do WhatsApp - CORRIGIDO: Nome agora é fixo! */}
         <div className="bg-[#0b141a] text-neutral-200 px-5 pt-10 pb-3 flex items-center gap-3 border-b border-neutral-900 z-10">
           <div className="w-10 h-10 bg-neutral-700 rounded-full flex items-center justify-center text-sm font-bold text-neutral-300">
-            {isTyping ? currentTyper[0].toUpperCase() : (settings.personAName[0]?.toUpperCase() || 'W')}
+            {contactName[0]?.toUpperCase() || 'W'}
           </div>
           <div>
             <div className="font-bold text-sm">
-              {isTyping ? currentTyper : settings.personAName}
+              {contactName}
             </div>
             <div className="text-xs text-[#53bdeb] font-medium h-4">
-              {isTyping ? 'digitando...' : 'online'}
+              {isTyping && !isMe(currentTyper) ? 'digitando...' : 'online'}
             </div>
           </div>
         </div>
 
-        {/* Corpo da Conversa (Fundo do Chat) */}
+        {/* Corpo da Conversa */}
         <div 
           ref={chatContainerRef}
           className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#0b141a] transition-all relative select-none"
@@ -129,12 +126,9 @@ export default function WhatsAppPreview({ messages, settings }: PreviewProps) {
                       : 'bg-[#202c33] text-[#e9edef] rounded-tl-none'
                   }`}
                 >
-                  {/* Nome acima da mensagem se for grupo/identificação necessária */}
-                  <span className="block text-[11px] font-semibold text-red-400 mb-0.5">{msg.sender}</span>
-                  
+                  <span className="block text-[11px] font-semibold text-neutral-400 mb-0.5">{msg.sender}</span>
                   <p className="pr-8 leading-relaxed">{msg.text}</p>
                   
-                  {/* Horário e Visto Azul */}
                   <div className="absolute bottom-1 right-2 flex items-center gap-0.5 text-[10px] text-[#8696a0]">
                     <span>{msg.time}</span>
                     {myMsg && settings.showReadTicks && (
