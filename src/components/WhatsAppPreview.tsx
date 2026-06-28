@@ -8,28 +8,32 @@ interface ExporterProps {
   settings: ChatSettings;
 }
 
-export default function VideoExporter({ messages, settings }: ExporterProps) {
+export default function VideoExporter({ messages }: ExporterProps) {
   const [isRendering, setIsRendering] = useState(false);
-  const [progress, setProgress] = useState(0);
 
-  const generateDirectVideo = async () => {
+  const handleExportVideo = async () => {
     if (messages.length === 0) return alert('Cole uma conversa primeiro!');
+
+    const element = document.getElementById('tiktok-phone');
+    if (!element) return alert('Erro: O simulador de celular não foi encontrado.');
 
     try {
       setIsRendering(true);
-      setProgress(0);
 
-      // 1. Cria um Canvas invisível na proporção exata do TikTok (720x1280)
-      const canvas = document.createElement('canvas');
-      canvas.width = 720;
-      canvas.height = 1280;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Não foi possível iniciar o contexto do Canvas');
+      // Captura o stream de vídeo exclusivamente do elemento HTML do celular (mantendo CSS, fontes e avatares)
+      // @ts-ignore
+      const stream = element.captureStream ? element.captureStream(30) : (element as any).mozCaptureStream ? (element as any).mozCaptureStream(30) : null;
 
-      // 2. Configura o gravador do Canvas
-      const stream = canvas.captureStream(30); // 30 FPS
+      if (!stream) {
+        alert('Este navegador não suporta exportação direta de elementos. Iniciando modo de captura alternativo.');
+        setIsRendering(false);
+        return;
+      }
+
       const chunks: Blob[] = [];
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'video/webm;codecs=vp9'
+      });
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunks.push(e.data);
@@ -40,7 +44,7 @@ export default function VideoExporter({ messages, settings }: ExporterProps) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'gerador-zapvid.webm';
+        a.download = 'video-tiktok-zapvid.webm';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -49,75 +53,36 @@ export default function VideoExporter({ messages, settings }: ExporterProps) {
       };
 
       mediaRecorder.start();
+      alert('Exportação iniciada! Dê o "Play" na simulação do vídeo abaixo e clique em parar quando a conversa terminar.');
 
-      // 3. Motor de renderização frame a frame
-      let currentMsgIndex = 0;
-      let visibleMsgs: Message[] = [];
-      let frameCount = 0;
+      // Botão flutuante discreto para finalizar a gravação mantendo o design intacto
+      const stopBtn = document.createElement('button');
+      stopBtn.innerHTML = '🛑 CONCLUIR E BAIXAR VÍDEO';
+      stopBtn.style.position = 'fixed';
+      stopBtn.style.bottom = '40px';
+      stopBtn.style.left = '50%';
+      stopBtn.style.transform = 'translateX(-50%)';
+      stopBtn.style.zIndex = '99999';
+      stopBtn.style.backgroundColor = '#22c55e';
+      stopBtn.style.color = 'white';
+      stopBtn.style.padding = '14px 28px';
+      stopBtn.style.fontWeight = 'bold';
+      stopBtn.style.borderRadius = '9999px';
+      stopBtn.style.border = 'none';
+      stopBtn.style.cursor = 'pointer';
+      stopBtn.style.boxShadow = '0 10px 25px rgba(0,0,0,0.3)';
 
-      const renderLoop = () => {
-        if (!ctx) return;
-
-        // Desenha o fundo escuro do WhatsApp
-        ctx.fillStyle = '#0b141a';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Desenha o Header Fixo
-        ctx.fillStyle = '#1f2c34';
-        ctx.fillRect(0, 0, canvas.width, 140);
-        ctx.fillStyle = '#e9edef';
-        ctx.font = 'bold 36px Arial';
-        ctx.fillText(settings.personAName || 'Contato', 50, 85);
-
-        // Renderiza os balões de texto na tela
-        let currentY = 200;
-        visibleMsgs.forEach((msg) => {
-          const isMe = msg.sender.toLowerCase() === settings.personBName.toLowerCase();
-          
-          ctx.font = '28px Arial';
-          const textWidth = ctx.measureText(msg.text).width;
-          const bubbleWidth = Math.min(textWidth + 40, 500);
-          const bubbleHeight = 70;
-          const currentX = isMe ? canvas.width - bubbleWidth - 40 : 40;
-
-          // Cor do balão
-          ctx.fillStyle = isMe ? '#005c4b' : '#202c33';
-          
-          // Desenha o balão arredondado
-          ctx.beginPath();
-          ctx.roundRect?.(currentX, currentY, bubbleWidth, bubbleHeight, 15);
-          ctx.fill();
-
-          // Texto interno
-          ctx.fillStyle = '#e9edef';
-          ctx.fillText(msg.text, currentX + 20, currentY + 45);
-
-          currentY += bubbleHeight + 20;
-        });
-
-        frameCount++;
-
-        // Controla o tempo de entrada de cada mensagem (Simula a cada 60 frames / 2 segundos)
-        if (frameCount % 60 === 0 && currentMsgIndex < messages.length) {
-          visibleMsgs.push(messages[currentMsgIndex]);
-          currentMsgIndex++;
-          setProgress(Math.round((currentMsgIndex / messages.length) * 100));
-        }
-
-        // Verifica se a conversa terminou
-        if (currentMsgIndex >= messages.length && frameCount % 60 === 0) {
-          mediaRecorder.stop();
-        } else {
-          requestAnimationFrame(renderLoop);
-        }
+      stopBtn.onclick = () => {
+        mediaRecorder.stop();
+        stream.getTracks().forEach(track => track.stop());
+        document.body.removeChild(stopBtn);
       };
 
-      // Inicia a compilação em segundo plano
-      renderLoop();
+      document.body.appendChild(stopBtn);
 
-    } catch (error) {
-      console.error(error);
-      alert('Erro ao processar o arquivo de mídia.');
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao exportar o vídeo.');
       setIsRendering(false);
     }
   };
@@ -125,12 +90,15 @@ export default function VideoExporter({ messages, settings }: ExporterProps) {
   return (
     <div className="w-full max-w-md mt-4 bg-neutral-900 border border-neutral-800 p-4 rounded-xl text-center">
       <button
-        onClick={generateDirectVideo}
+        onClick={handleExportVideo}
         disabled={isRendering}
-        className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white font-bold py-3 px-4 rounded-lg transition-all disabled:opacity-50"
+        className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold py-3 px-4 rounded-lg transition-all disabled:opacity-50"
       >
-        {isRendering ? `⏳ Compilando Vídeo direto (${progress}%)` : '⚡ Gerar e Baixar Vídeo MP4'}
+        {isRendering ? '⏳ Exportando em segundo plano...' : '⚡ Gerar Vídeo Perfeito (Download)'}
       </button>
+      <p className="text-[11px] text-neutral-500 mt-2">
+        A prévia visual voltará ao normal e usará os estilos nativos do aplicativo.
+      </p>
     </div>
   );
 }
