@@ -18,14 +18,13 @@ export default function VideoExporter({ messages }: ExporterProps) {
     const element = document.getElementById('zapvid-phone-container');
     if (!element) return alert('Erro: Componente visual do celular não encontrado.');
 
-    // Importa dinamicamente a biblioteca para não quebrar o build do Next.js
+    // Importação dinâmica sem quebrar o ecossistema estrito de compilação
     const html2canvas = (await import('html2canvas')).default;
 
     try {
       setIsRendering(true);
       setProgress('Iniciando...');
 
-      // 1. Prepara um Canvas oculto no tamanho exato do celular para receber os frames
       const targetWidth = element.offsetWidth;
       const targetHeight = element.offsetHeight;
       
@@ -35,8 +34,15 @@ export default function VideoExporter({ messages }: ExporterProps) {
       const ctx = recordCanvas.getContext('2d');
       if (!ctx) throw new Error('Não foi possível obter o contexto do canvas.');
 
-      // 2. Cria o gravador de mídia a partir desse canvas estável
-      const stream = recordCanvas.captureStream(30); // 30 FPS estáveis
+      // Captura estável da stream de forma compatível e tipada
+      const stream = (recordCanvas as any).captureStream ? (recordCanvas as any).captureStream(30) : null;
+
+      if (!stream) {
+        alert('Seu navegador não suporta a API de captura de mídia necessária.');
+        setIsRendering(false);
+        return;
+      }
+
       const chunks: Blob[] = [];
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
 
@@ -60,10 +66,9 @@ export default function VideoExporter({ messages }: ExporterProps) {
 
       mediaRecorder.start();
 
-      // 3. Dá o Play automático na simulação da tela
+      // Dispara o início sincronizado da reprodução na interface visual
       window.dispatchEvent(new CustomEvent('zapvid-start-render'));
 
-      // 4. Loop de renderização: tira fotos da sua div em tempo real e joga pro vídeo
       let isRecordingActive = true;
       
       const captureFrame = async () => {
@@ -72,7 +77,7 @@ export default function VideoExporter({ messages }: ExporterProps) {
         try {
           const canvasFrame = await html2canvas(element, {
             useCORS: true,
-            scale: 1, // Mantém a proporção real leve e idêntica
+            scale: 1,
             backgroundColor: '#0b141a'
           });
 
@@ -87,15 +92,21 @@ export default function VideoExporter({ messages }: ExporterProps) {
         }
       };
 
-      // Inicia o processo de captura dos frames visuais
       captureFrame();
 
-      // 5. Escuta o fim da conversa para fechar o arquivo e baixar
       const handleAutoStop = () => {
         isRecordingActive = false;
         if (mediaRecorder.state !== 'inactive') {
           mediaRecorder.stop();
-          stream.getTracks().forEach((track) => track.stop());
+          // Interrompe todas as faixas ativas com tipagem segura padrão do navegador
+          const tracks = stream.getTracks();
+          if (tracks && Array.isArray(tracks)) {
+            tracks.forEach((track: MediaStreamTrack) => {
+              if (track && typeof track.stop === 'function') {
+                track.stop();
+              }
+            });
+          }
         }
         window.removeEventListener('zapvid-end-render', handleAutoStop);
       };
