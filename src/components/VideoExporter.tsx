@@ -3,6 +3,13 @@
 import { useState } from 'react';
 import { Message, ChatSettings } from '../types/chat';
 
+// Declaração estrita para o compilador do Next.js aceitar a API de captura em memória
+declare global {
+  interface HTMLCanvasElement {
+    captureStream(frameRate?: number): MediaStream;
+  }
+}
+
 interface ExporterProps {
   messages: Message[];
   settings: ChatSettings;
@@ -10,7 +17,6 @@ interface ExporterProps {
 
 export default function VideoExporter({ messages }: ExporterProps) {
   const [isRendering, setIsRendering] = useState(false);
-  const [progress, setProgress] = useState('');
 
   const handleExport = async () => {
     if (messages.length === 0) return alert('Cole uma conversa primeiro!');
@@ -18,12 +24,11 @@ export default function VideoExporter({ messages }: ExporterProps) {
     const element = document.getElementById('zapvid-phone-container');
     if (!element) return alert('Erro: Componente visual do celular não encontrado.');
 
-    // Importação puramente dinâmica para não pesar ou travar no servidor Next.js
+    // Importação puramente dinâmica para isolar a biblioteca do SSR do Next.js
     const html2canvas = (await import('html2canvas')).default;
 
     try {
       setIsRendering(true);
-      setProgress('Iniciando...');
 
       const targetWidth = element.offsetWidth;
       const targetHeight = element.offsetHeight;
@@ -34,10 +39,9 @@ export default function VideoExporter({ messages }: ExporterProps) {
       const ctx = recordCanvas.getContext('2d');
       if (!ctx) throw new Error('Não foi possível obter o contexto do canvas.');
 
-      // Extensão segura de tipo para passar ileso pelo build estrito da Vercel
-      const canvasAsAny = recordCanvas as any;
-      const stream = typeof canvasAsAny.captureStream === 'function' 
-        ? canvasAsAny.captureStream(30) 
+      // Agora o TypeScript sabe exatamente o que é esta função e valida o build nativamente
+      const stream = typeof recordCanvas.captureStream === 'function' 
+        ? recordCanvas.captureStream(30) 
         : null;
 
       if (!stream) {
@@ -64,7 +68,6 @@ export default function VideoExporter({ messages }: ExporterProps) {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         setIsRendering(false);
-        setProgress('');
       };
 
       mediaRecorder.start();
@@ -101,7 +104,6 @@ export default function VideoExporter({ messages }: ExporterProps) {
         if (mediaRecorder.state !== 'inactive') {
           mediaRecorder.stop();
           
-          // Tratamento sem 'any' implícito para as faixas de vídeo passarem direto pelo build
           const tracks = stream.getTracks();
           if (tracks && Array.isArray(tracks)) {
             for (let i = 0; i < tracks.length; i++) {
@@ -121,7 +123,6 @@ export default function VideoExporter({ messages }: ExporterProps) {
       console.error(err);
       alert('Erro durante o processamento do vídeo.');
       setIsRendering(false);
-      setProgress('');
     }
   };
 
@@ -132,7 +133,7 @@ export default function VideoExporter({ messages }: ExporterProps) {
         disabled={isRendering}
         className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white font-bold py-3 px-4 rounded-lg transition-all disabled:opacity-50"
       >
-        {isRendering ? `⚡ Gerando vídeo... ${progress}` : '📥 Baixar Vídeo Pronto'}
+        {isRendering ? '⚡ Gerando arquivo de vídeo...' : '📥 Baixar Vídeo Pronto'}
       </button>
     </div>
   );
