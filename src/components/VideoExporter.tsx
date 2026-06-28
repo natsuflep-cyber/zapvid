@@ -11,29 +11,31 @@ interface ExporterProps {
 export default function VideoExporter({ messages }: ExporterProps) {
   const [isRendering, setIsRendering] = useState(false);
 
-  const handleGenerateVideo = async () => {
+  const handleAutomatedExport = async () => {
     if (messages.length === 0) return alert('Cole uma conversa primeiro!');
-    
+
+    const element = document.getElementById('zapvid-phone-container');
+    if (!element) return alert('Erro: Componente visual do celular não encontrado.');
+
     try {
       setIsRendering(true);
-      
-      // 1. Pede permissão para capturar a tela/aba do navegador
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: { ideal: 30 } },
-        audio: false
-      });
+
+      // @ts-ignore
+      const stream = element.captureStream ? element.captureStream(30) : (element as any).mozCaptureStream ? (element as any).mozCaptureStream(30) : null;
+
+      if (!stream) {
+        alert('Seu navegador não suporta a renderização programática direta.');
+        setIsRendering(false);
+        return;
+      }
 
       const chunks: Blob[] = [];
-      // 2. Inicializa o gravador de mídia nativo do navegador
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp9'
-      });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunks.push(e.data);
       };
 
-      // 3. Quando a gravação parar, gera o download automático do arquivo
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunks, { type: 'video/webm' });
         const url = URL.createObjectURL(blob);
@@ -47,25 +49,34 @@ export default function VideoExporter({ messages }: ExporterProps) {
         setIsRendering(false);
       };
 
-      // Inicia a gravação
       mediaRecorder.start();
-      alert('Selecione a aba do simulador e clique em Compartilhar. Pare a gravação quando a conversa terminar!');
+      window.dispatchEvent(new CustomEvent('zapvid-start-render'));
 
-    } catch (error) {
-      console.error(error);
-      alert('Ocorreu um erro ou a captura de tela foi cancelada.');
+      const handleAutoStop = () => {
+        if (mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+          stream.getTracks().forEach((track: any) => track.stop());
+        }
+        window.removeEventListener('zapvid-end-render', handleAutoStop);
+      };
+
+      window.addEventListener('zapvid-end-render', handleAutoStop);
+
+    } catch (err) {
+      console.error(err);
+      alert('Falha ao compilar mídia.');
       setIsRendering(false);
     }
   };
 
   return (
-    <div className="w-full max-w-md mt-4 bg-neutral-900 border border-neutral-800 p-4 rounded-xl">
+    <div className="w-full max-w-md mt-4 bg-neutral-900 border border-neutral-800 p-4 rounded-xl text-center">
       <button
-        onClick={handleGenerateVideo}
+        onClick={handleAutomatedExport}
         disabled={isRendering}
-        className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold py-3 px-4 rounded-lg transition-all disabled:opacity-50"
+        className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white font-bold py-3 px-4 rounded-lg transition-all disabled:opacity-50"
       >
-        {isRendering ? '🎥 Gravando Tela... Pare no botão do navegador' : '🎬 Iniciar Gravação Final'}
+        {isRendering ? '⚡ Gerando arquivo de vídeo...' : '📥 Baixar Vídeo Pronto'}
       </button>
     </div>
   );
