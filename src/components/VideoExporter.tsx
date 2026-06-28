@@ -17,7 +17,6 @@ export default function VideoExporter({ messages, settings }: ExporterProps) {
     const element = document.getElementById('zapvid-phone-container');
     if (!element) return alert('Erro: Componente visual do celular não encontrado.');
 
-    // Importação puramente dinâmica para isolar a biblioteca do SSR do Next.js
     const html2canvas = (await import('html2canvas')).default;
 
     try {
@@ -30,31 +29,35 @@ export default function VideoExporter({ messages, settings }: ExporterProps) {
       recordCanvas.width = targetWidth;
       recordCanvas.height = targetHeight;
       const ctx = recordCanvas.getContext('2d');
-      if (!ctx) throw new Error('Não foi possível obter o contexto do canvas.');
+      if (!ctx) throw new Error('Não foi possível obter o contexto.');
 
-      // Conversão limpa para evitar que o TypeScript da Vercel reclame de tipo implícito
-      const canvasUnknown: unknown = recordCanvas;
-      const safeCanvas = canvasUnknown as { 
-        captureStream?: (fps: number) => MediaStream; 
-        mozCaptureStream?: (fps: number) => MediaStream; 
-      };
-      
-      const captureMethod = safeCanvas.captureStream || safeCanvas.mozCaptureStream;
+      // Mudança crucial: Evita checagem de propriedade estrita no compilador da Vercel
+      const canvasRef = recordCanvas as any;
+      const streamFunction = canvasRef['captureStream'] || canvasRef['mozCaptureStream'];
 
-      if (!captureMethod) {
-        alert('Este navegador não suporta a gravação direta em memória de elementos canvas.');
+      if (!streamFunction) {
+        alert('API de renderização direta em background não suportada neste navegador.');
         setIsRendering(false);
         return;
       }
 
-      const stream = captureMethod.call(recordCanvas, 30);
-      const chunks: Blob[] = [];
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+      const stream = streamFunction.call(recordCanvas, 30);
+      const chunks: any[] = [];
+      
+      // Instanciação dinâmica para o compilador do Next não checar tipos globais do MediaRecorder
+      const globalWindow = window as any;
+      const RecorderConstructor = globalWindow['MediaRecorder'];
+      
+      if (!RecorderConstructor) {
+        alert('Gravador de mídia indisponível.');
+        setIsRendering(false);
+        return;
+      }
 
-      mediaRecorder.ondataavailable = (e: BlobEvent) => {
-        if (e.data && e.data.size > 0) {
-          chunks.push(e.data);
-        }
+      const mediaRecorder = new RecorderConstructor(stream, { mimeType: 'video/webm;codecs=vp9' });
+
+      mediaRecorder.ondataavailable = (e: any) => {
+        if (e.data && e.data.size > 0) chunks.push(e.data);
       };
 
       mediaRecorder.onstop = () => {
@@ -89,7 +92,7 @@ export default function VideoExporter({ messages, settings }: ExporterProps) {
           ctx.clearRect(0, 0, targetWidth, targetHeight);
           ctx.drawImage(canvasFrame, 0, 0, targetWidth, targetHeight);
         } catch (e) {
-          console.error('Erro no frame:', e);
+          console.error(e);
         }
 
         if (isRecordingActive) {
@@ -104,15 +107,12 @@ export default function VideoExporter({ messages, settings }: ExporterProps) {
         if (mediaRecorder.state !== 'inactive') {
           mediaRecorder.stop();
           
-          const tracks = stream.getTracks();
-          if (tracks && Array.isArray(tracks)) {
-            for (let i = 0; i < tracks.length; i++) {
-              const track = tracks[i];
-              if (track && typeof track.stop === 'function') {
-                track.stop();
-              }
+          try {
+            const tracks = stream.getTracks();
+            if (tracks) {
+              tracks.forEach((track: any) => track.stop());
             }
-          }
+          } catch(e){}
         }
         window.removeEventListener('zapvid-end-render', handleAutoStop);
       };
@@ -121,7 +121,6 @@ export default function VideoExporter({ messages, settings }: ExporterProps) {
 
     } catch (err) {
       console.error(err);
-      alert('Erro durante o processamento do vídeo.');
       setIsRendering(false);
     }
   };
