@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import { Message, ChatSettings } from '../types/chat';
 
-interface ExporterProps {
-  messages: Message[];
-  settings: ChatSettings;
-}
-
-export default function VideoExporter({ messages }: ExporterProps) {
+// Força a tipagem explícita dos parâmetros para matar o erro de build da Vercel
+export default function VideoExporter({ 
+  messages, 
+  settings 
+}: { 
+  messages: Message[]; 
+  settings: ChatSettings; 
+}) {
   const [isRendering, setIsRendering] = useState(false);
 
   const handleExport = async () => {
@@ -17,7 +19,7 @@ export default function VideoExporter({ messages }: ExporterProps) {
     const element = document.getElementById('zapvid-phone-container');
     if (!element) return alert('Erro: Componente visual do celular não encontrado.');
 
-    // Importação 100% dinâmica para isolar a biblioteca do lado do servidor
+    // Importação dinâmica para evitar problemas no lado do servidor (SSR)
     const html2canvas = (await import('html2canvas')).default;
 
     try {
@@ -32,7 +34,7 @@ export default function VideoExporter({ messages }: ExporterProps) {
       const ctx = recordCanvas.getContext('2d');
       if (!ctx) throw new Error('Não foi possível obter o contexto do canvas.');
 
-      // O truque definitivo para enganar o compilador da Vercel: acessar por string
+      // Pega o método do navegador de forma isolada e segura para o TypeScript
       const canvasObj = recordCanvas as any;
       const captureMethod = canvasObj['captureStream'] || canvasObj['mozCaptureStream'];
       
