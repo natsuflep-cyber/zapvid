@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import "./globals.css";
+import "./globals.css"; // ⚠️ ESSA LINHA PRECISA ESTAR EXATAMENTE ASSIM!
 
 export const metadata: Metadata = {
   title: "ZapVid - Gerador de Conversas",
@@ -13,7 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body className="bg-black text-white">{children}</body>
     </html>
   );
 }
