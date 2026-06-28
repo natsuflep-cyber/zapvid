@@ -17,7 +17,7 @@ export default function VideoExporter({ messages, settings }: ExporterProps) {
     const element = document.getElementById('zapvid-phone-container');
     if (!element) return alert('Erro: Componente visual do celular não encontrado.');
 
-    // Importação dinâmica para isolar completamente a biblioteca no Next.js
+    // Importação puramente dinâmica para isolar a biblioteca do SSR do Next.js
     const html2canvas = (await import('html2canvas')).default;
 
     try {
@@ -32,24 +32,29 @@ export default function VideoExporter({ messages, settings }: ExporterProps) {
       const ctx = recordCanvas.getContext('2d');
       if (!ctx) throw new Error('Não foi possível obter o contexto do canvas.');
 
-      // Criamos uma referência genérica do Canvas para ignorar validações estritas de métodos experimentais
-      const safeCanvas = recordCanvas as any;
+      // Conversão limpa para evitar que o TypeScript da Vercel reclame de tipo implícito
+      const canvasUnknown: unknown = recordCanvas;
+      const safeCanvas = canvasUnknown as { 
+        captureStream?: (fps: number) => MediaStream; 
+        mozCaptureStream?: (fps: number) => MediaStream; 
+      };
       
-      if (!safeCanvas.captureStream && !safeCanvas.mozCaptureStream) {
-        alert('Este navegador não suporta a API de captura necessária.');
+      const captureMethod = safeCanvas.captureStream || safeCanvas.mozCaptureStream;
+
+      if (!captureMethod) {
+        alert('Este navegador não suporta a gravação direta em memória de elementos canvas.');
         setIsRendering(false);
         return;
       }
 
-      const stream: MediaStream = safeCanvas.captureStream 
-        ? safeCanvas.captureStream(30) 
-        : safeCanvas.mozCaptureStream(30);
-
+      const stream = captureMethod.call(recordCanvas, 30);
       const chunks: Blob[] = [];
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
+      mediaRecorder.ondataavailable = (e: BlobEvent) => {
+        if (e.data && e.data.size > 0) {
+          chunks.push(e.data);
+        }
       };
 
       mediaRecorder.onstop = () => {
@@ -99,13 +104,12 @@ export default function VideoExporter({ messages, settings }: ExporterProps) {
         if (mediaRecorder.state !== 'inactive') {
           mediaRecorder.stop();
           
-          // Desativação segura das faixas de vídeo usando APIs padrão suportadas por qualquer versão do TS
           const tracks = stream.getTracks();
           if (tracks && Array.isArray(tracks)) {
             for (let i = 0; i < tracks.length; i++) {
-              const currentTrack = tracks[i];
-              if (currentTrack) {
-                currentTrack.stop();
+              const track = tracks[i];
+              if (track && typeof track.stop === 'function') {
+                track.stop();
               }
             }
           }
