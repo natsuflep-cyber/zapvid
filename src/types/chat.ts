@@ -1,9 +1,9 @@
 export interface Message {
   id: string;
-  sender: string;       // Nome de quem enviou
-  text: string;         // Conteúdo da mensagem
-  time: string;         // Horário (ex: "14:32")
-  isTyping?: boolean;   // Se deve mostrar a animação "digitando..." antes dela
+  sender: string;
+  text: string;
+  time: string;
+  isTyping?: boolean;
 }
 
 export interface ChatSettings {
@@ -11,8 +11,8 @@ export interface ChatSettings {
   personBName: string;
   personAPhoto: string;
   personBPhoto: string;
-  scrollSpeed: number;      // Em segundos
-  typingDuration: number;   // Tempo do efeito "digitando..."
-  showReadTicks: boolean;   // Visto azul
+  scrollSpeed: number;
+  typingDuration: number;
+  showReadTicks: boolean;
   theme: 'dark' | 'light';
 }
