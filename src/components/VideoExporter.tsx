@@ -3,14 +3,12 @@
 import { useState } from 'react';
 import { Message, ChatSettings } from '../types/chat';
 
-// Força a tipagem explícita dos parâmetros para matar o erro de build da Vercel
-export default function VideoExporter({ 
-  messages, 
-  settings 
-}: { 
-  messages: Message[]; 
-  settings: ChatSettings; 
-}) {
+interface ExporterProps {
+  messages: Message[];
+  settings: ChatSettings;
+}
+
+export default function VideoExporter({ messages, settings }: ExporterProps) {
   const [isRendering, setIsRendering] = useState(false);
 
   const handleExport = async () => {
@@ -19,7 +17,7 @@ export default function VideoExporter({
     const element = document.getElementById('zapvid-phone-container');
     if (!element) return alert('Erro: Componente visual do celular não encontrado.');
 
-    // Importação dinâmica para evitar problemas no lado do servidor (SSR)
+    // Importação dinâmica para isolar completamente a biblioteca no Next.js
     const html2canvas = (await import('html2canvas')).default;
 
     try {
@@ -34,17 +32,19 @@ export default function VideoExporter({
       const ctx = recordCanvas.getContext('2d');
       if (!ctx) throw new Error('Não foi possível obter o contexto do canvas.');
 
-      // Pega o método do navegador de forma isolada e segura para o TypeScript
-      const canvasObj = recordCanvas as any;
-      const captureMethod = canvasObj['captureStream'] || canvasObj['mozCaptureStream'];
+      // Criamos uma referência genérica do Canvas para ignorar validações estritas de métodos experimentais
+      const safeCanvas = recordCanvas as any;
       
-      if (typeof captureMethod !== 'function') {
-        alert('Este navegador não suporta a gravação direta em memória de elementos canvas.');
+      if (!safeCanvas.captureStream && !safeCanvas.mozCaptureStream) {
+        alert('Este navegador não suporta a API de captura necessária.');
         setIsRendering(false);
         return;
       }
 
-      const stream = captureMethod.call(recordCanvas, 30);
+      const stream: MediaStream = safeCanvas.captureStream 
+        ? safeCanvas.captureStream(30) 
+        : safeCanvas.mozCaptureStream(30);
+
       const chunks: Blob[] = [];
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
 
@@ -99,12 +99,13 @@ export default function VideoExporter({
         if (mediaRecorder.state !== 'inactive') {
           mediaRecorder.stop();
           
+          // Desativação segura das faixas de vídeo usando APIs padrão suportadas por qualquer versão do TS
           const tracks = stream.getTracks();
           if (tracks && Array.isArray(tracks)) {
             for (let i = 0; i < tracks.length; i++) {
-              const track = tracks[i];
-              if (track && typeof track.stop === 'function') {
-                track.stop();
+              const currentTrack = tracks[i];
+              if (currentTrack) {
+                currentTrack.stop();
               }
             }
           }
