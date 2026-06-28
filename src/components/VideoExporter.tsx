@@ -3,13 +3,6 @@
 import { useState } from 'react';
 import { Message, ChatSettings } from '../types/chat';
 
-// Declaração estrita para o compilador do Next.js aceitar a API de captura em memória
-declare global {
-  interface HTMLCanvasElement {
-    captureStream(frameRate?: number): MediaStream;
-  }
-}
-
 interface ExporterProps {
   messages: Message[];
   settings: ChatSettings;
@@ -24,7 +17,7 @@ export default function VideoExporter({ messages }: ExporterProps) {
     const element = document.getElementById('zapvid-phone-container');
     if (!element) return alert('Erro: Componente visual do celular não encontrado.');
 
-    // Importação puramente dinâmica para isolar a biblioteca do SSR do Next.js
+    // Importação 100% dinâmica para isolar a biblioteca do lado do servidor
     const html2canvas = (await import('html2canvas')).default;
 
     try {
@@ -39,17 +32,17 @@ export default function VideoExporter({ messages }: ExporterProps) {
       const ctx = recordCanvas.getContext('2d');
       if (!ctx) throw new Error('Não foi possível obter o contexto do canvas.');
 
-      // Agora o TypeScript sabe exatamente o que é esta função e valida o build nativamente
-      const stream = typeof recordCanvas.captureStream === 'function' 
-        ? recordCanvas.captureStream(30) 
-        : null;
-
-      if (!stream) {
+      // O truque definitivo para enganar o compilador da Vercel: acessar por string
+      const canvasObj = recordCanvas as any;
+      const captureMethod = canvasObj['captureStream'] || canvasObj['mozCaptureStream'];
+      
+      if (typeof captureMethod !== 'function') {
         alert('Este navegador não suporta a gravação direta em memória de elementos canvas.');
         setIsRendering(false);
         return;
       }
 
+      const stream = captureMethod.call(recordCanvas, 30);
       const chunks: Blob[] = [];
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
 
