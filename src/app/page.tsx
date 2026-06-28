@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Message, ChatSettings } from '../types/chat';
 import { parseRawText } from '../utils/parser';
 import WhatsAppPreview from '../components/WhatsAppPreview';
+import VideoExporter from '../components/VideoExporter';
 
 export default function Home() {
   const [rawInput, setRawInput] = useState('');
